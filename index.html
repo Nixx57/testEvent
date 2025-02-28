@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Planning Disponibilités Persistant</title>
+  <style>
+    /* Fond global et typographie moderne */
+    body {
+      background-color: #f5f5f5;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      margin: 20px;
+    }
+
+    /* Panneau de contrôle modernisé */
+    #controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+      padding: 10px;
+      background: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    #controls label {
+      font-weight: bold;
+    }
+
+    #controls select,
+    #controls input[type="number"] {
+      padding: 6px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    #controls button {
+      border: none;
+      background-color: #3498db;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    #controls button:hover {
+      background-color: #2980b9;
+    }
+
+    /* Onglets */
+    #tabs {
+      margin-bottom: 10px;
+      display: flex;
+      gap: 10px;
+    }
+
+    #tabs button {
+      padding: 8px 16px;
+      cursor: pointer;
+      border: none;
+      background-color: #bdc3c7;
+      border-radius: 4px;
+      transition: background-color 0.3s ease;
+    }
+
+    #tabs button.active {
+      background-color: #3498db;
+      color: white;
+    }
+
+    /* Tableaux et cellules */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+
+    th,
+    td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: center;
+      min-width: 40px;
+      user-select: none;
+    }
+
+    .stickyRow1 th {
+      position: sticky;
+      top: 0;
+      background: #ecf0f1;
+      z-index: 3;
+    }
+
+    .stickyRow2 th {
+      position: sticky;
+      top: 40px;
+      background: #ecf0f1;
+      z-index: 2;
+    }
+
+    #tableContainer,
+    #summaryContainer {
+      overflow: auto;
+      max-height: 70vh;
+      border: none;
+      border-radius: 8px;
+      padding: 10px;
+      background-color: white;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    input[type="text"] {
+      width: 90%;
+      padding: 6px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    /* Sélection multiple */
+    .selected {
+      outline: 2px solid blue;
+    }
+
+    /* Menu contextuel moderne */
+    #contextMenu {
+      display: none;
+      position: absolute;
+      z-index: 1000;
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+
+    #contextMenu .menuItem {
+      padding: 10px 15px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    #contextMenu .menuItem:hover {
+      background-color: #f0f0f0;
+    }
+
+    /* Couleurs par option */
+    #contextMenu .menuItem[data-state="0"] {
+      background-color: #ffffff;
+    }
+
+    #contextMenu .menuItem[data-state="1"] {
+      background-color: #a8e6cf;
+    }
+
+    #contextMenu .menuItem[data-state="2"] {
+      background-color: #ff8b94;
+    }
+
+    /* Bouton de suppression individuel */
+    .remove-btn {
+      color: red;
+      cursor: pointer;
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      font-weight: bold;
+      background: #ffffff;
+      border-radius: 50%;
+      padding: 0 6px;
+      font-size: 14px;
+      line-height: 16px;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Remplacez l'URL ci-dessous par celle fournie -->
+  <script>const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbyIMPAR9N9Vbs6Nb9eaGgKxEowcOFMC6GDWKHcDCy6Trx8ClHl8JwLx7RQmrAAN2y2F/exec";</script>
+
+  <div id="controls">
+    <label for="monthSelect">Mois :</label>
+    <select id="monthSelect"></select>
+    <label for="yearInput">Année :</label>
+    <input type="number" id="yearInput" value="2025" style="width:80px;">
+    <button id="updateHeader">🔄 Mettre à jour</button>
+    <button id="addPerson">➕ Ajouter personne</button>
+    <button id="clearAll">🗑️ Réinitialiser</button>
+    <!-- Ces deux boutons sont désormais intégrés dans la synchro automatique, mais on les garde pour un contrôle manuel -->
+    <button id="loadData">📥 Charger</button>
+    <button id="saveData">💾 Sauvegarder</button>
+  </div>
+
+  <div id="tabs">
+    <button id="editTabBtn" class="active">Edition</button>
+    <button id="summaryTabBtn">Synthèse</button>
+  </div>
+
+  <div id="content">
+    <!-- Vue Edition -->
+    <div id="editView">
+      <div id="tableContainer">
+        <table id="mainTable">
+          <thead>
+            <tr id="headerRowDays" class="stickyRow1"></tr>
+            <tr id="headerRowWeekDays" class="stickyRow2"></tr>
+          </thead>
+          <tbody id="tableBody">
+            <!-- Les tableaux de chaque personne seront générés ici -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <!-- Vue Synthèse -->
+    <div id="summaryView" style="display:none;">
+      <div id="summaryContainer">
+        <table id="summaryTable">
+          <thead>
+            <tr id="summaryHeaderDays" class="stickyRow1"></tr>
+            <tr id="summaryHeaderWeekDays" class="stickyRow2"></tr>
+          </thead>
+          <tbody id="summaryTableBody">
+            <!-- Tableau de synthèse -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Menu contextuel pour la sélection multiple -->
+  <div id="contextMenu">
+    <div class="menuItem" data-state="0">Blanc</div>
+    <div class="menuItem" data-state="1">Disponible (Vert)</div>
+    <div class="menuItem" data-state="2">Indisponible (Rouge)</div>
+  </div>
+
+  <script>
+    // Variables globales
+    let persons = [];
+    let currentMonth, currentYear, daysInMonth;
+    const timeSlots = ["16h-17h", "17h-18h", "18h-19h", "19h-20h", "20h-21h", "21h-22h", "22h-23h", "23h-00h"];
+
+    // Variables pour la sélection multiple
+    let isSelecting = false;
+    let selectionStart = null;
+    let selectionEnd = null;
+    let selectedCells = [];
+    let currentSelectionPerson = null;
+    let lastContextMenuTime = 0;
+
+    // --- Fonctions de persistance via Google Sheets (avec async/await) ---
+    async function saveDataToSheet() {
+      const state = { currentMonth, currentYear, persons };
+      const jsonStr = JSON.stringify(state);
+      const payload = { data: [[jsonStr]] };
+      try {
+        let response = await fetch(SHEET_API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        let result = await response.json();
+        console.log("Données sauvegardées :", result);
+      } catch (e) {
+        console.error("Erreur lors de la sauvegarde des données :", e);
+      }
+    }
+
+    async function loadDataFromSheetAsync() {
+      try {
+        let response = await fetch(SHEET_API_URL);
+        let result = await response.json();
+        if (result.data && result.data.length > 0 && result.data[0].length > 0) {
+          const jsonString = result.data[0][0];
+          return JSON.parse(jsonString);
+        }
+      } catch (e) {
+        console.error("Erreur lors du chargement des données :", e);
+      }
+      return null;
+    }
+
+    // Fonction de synchronisation : sauvegarde puis vérifie la cohérence avec le back-end.
+    async function syncBackend() {
+      await saveDataToSheet();
+      const remoteState = await loadDataFromSheetAsync();
+      if (remoteState) {
+        const localState = { currentMonth, currentYear, persons };
+        if (JSON.stringify(remoteState) !== JSON.stringify(localState)) {
+          console.warn("Données locales et distantes divergentes. Mise à jour locale.");
+          currentMonth = remoteState.currentMonth;
+          currentYear = remoteState.currentYear;
+          persons = remoteState.persons;
+          document.getElementById("monthSelect").value = currentMonth;
+          document.getElementById("yearInput").value = currentYear;
+          updateHeader();
+          renderEditTable();
+          renderSummaryTable();
+        }
+      }
+    }
+
+    // --- Fonctions d'initialisation et de rendu de l'interface ---
+    document.addEventListener("DOMContentLoaded", () => {
+      const monthSelect = document.getElementById("monthSelect");
+      const yearInput = document.getElementById("yearInput");
+      const now = new Date();
+      currentMonth = now.getMonth();
+      currentYear = now.getFullYear();
+
+      // Remplissage du select pour les mois
+      const monthNames = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+      monthNames.forEach((name, index) => {
+        let option = document.createElement("option");
+        option.value = index;
+        option.textContent = name;
+        if (index === currentMonth) option.selected = true;
+        monthSelect.appendChild(option);
+      });
+      yearInput.value = currentYear;
+
+      // Au lancement, on récupère les données du back-end (s'il y en a)
+      loadDataFromSheetAsync().then(state => {
+        if (state) {
+          currentMonth = state.currentMonth;
+          currentYear = state.currentYear;
+          persons = state.persons;
+          monthSelect.value = currentMonth;
+          yearInput.value = currentYear;
+        } else {
+          // Sinon, on ajoute une première personne par défaut
+          addPerson();
+        }
+        updateHeader();
+        renderEditTable();
+        renderSummaryTable();
+      });
+
+      // Boutons de contrôle
+      document.getElementById("updateHeader").addEventListener("click", () => {
+        currentMonth = parseInt(monthSelect.value);
+        currentYear = parseInt(yearInput.value);
+        updateHeader();
+        adjustAvailabilityColumns();
+        renderEditTable();
+        renderSummaryTable();
+        syncBackend();
+      });
+      document.getElementById("addPerson").addEventListener("click", () => {
+        addPerson();
+        renderEditTable();
+        renderSummaryTable();
+        syncBackend();
+      });
+      document.getElementById("clearAll").addEventListener("click", () => {
+        persons = [];
+        addPerson();
+        renderEditTable();
+        renderSummaryTable();
+        syncBackend();
+      });
+      document.getElementById("loadData").addEventListener("click", () => {
+        loadDataFromSheetAsync().then(state => {
+          if (state) {
+            currentMonth = state.currentMonth;
+            currentYear = state.currentYear;
+            persons = state.persons;
+            document.getElementById("monthSelect").value = currentMonth;
+            document.getElementById("yearInput").value = currentYear;
+            updateHeader();
+            renderEditTable();
+            renderSummaryTable();
+          }
+        });
+      });
+      document.getElementById("saveData").addEventListener("click", () => {
+        syncBackend();
+      });
+      document.getElementById("editTabBtn").addEventListener("click", () => {
+        document.getElementById("editView").style.display = "block";
+        document.getElementById("summaryView").style.display = "none";
+        document.getElementById("editTabBtn").classList.add("active");
+        document.getElementById("summaryTabBtn").classList.remove("active");
+      });
+      document.getElementById("summaryTabBtn").addEventListener("click", () => {
+        renderSummaryTable();
+        document.getElementById("editView").style.display = "none";
+        document.getElementById("summaryView").style.display = "block";
+        document.getElementById("editTabBtn").classList.remove("active");
+        document.getElementById("summaryTabBtn").classList.add("active");
+      });
+
+      // Gestion de la sélection multiple et affichage du menu contextuel
+      document.addEventListener("mouseup", (e) => {
+        if (isSelecting) {
+          isSelecting = false;
+          if (selectedCells.length > 0) {
+            showContextMenu(e.pageX, e.pageY);
+          }
+        }
+      });
+      document.addEventListener("click", (e) => {
+        if (Date.now() - lastContextMenuTime < 200) return;
+        if (e.target.closest("#contextMenu") === null) {
+          hideContextMenu();
+          clearSelection();
+        }
+      });
+      document.querySelectorAll("#contextMenu .menuItem").forEach(item => {
+        item.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const newState = parseInt(item.getAttribute("data-state"));
+          selectedCells.forEach(cell => {
+            const p = parseInt(cell.dataset.person);
+            const t = parseInt(cell.dataset.timeslot);
+            const d = parseInt(cell.dataset.day);
+            persons[p].availability[t][d] = newState;
+            updateCellColor(cell, newState);
+          });
+          hideContextMenu();
+          clearSelection();
+          renderSummaryTable();
+          syncBackend();
+        });
+      });
+    });
+
+    // --- Fonctions de rendu de l'interface ---
+    function updateHeader() {
+      daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+      const headerRowDays = document.getElementById("headerRowDays");
+      const headerRowWeekDays = document.getElementById("headerRowWeekDays");
+      headerRowDays.innerHTML = "<th></th>";
+      headerRowWeekDays.innerHTML = "<th></th>";
+
+      const summaryHeaderRowDays = document.getElementById("summaryHeaderDays");
+      const summaryHeaderRowWeekDays = document.getElementById("summaryHeaderWeekDays");
+      summaryHeaderRowDays.innerHTML = "<th></th>";
+      summaryHeaderRowWeekDays.innerHTML = "<th></th>";
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        let date = new Date(currentYear, currentMonth, day);
+
+        let th = document.createElement("th");
+        th.textContent = day;
+        if (date.getDay() === 1 && day !== 1) {
+          th.style.borderLeft = "2px solid grey";
+        }
+        headerRowDays.appendChild(th);
+
+        let th2 = document.createElement("th");
+        const weekday = date.toLocaleDateString("fr-FR", { weekday: "short" }).charAt(0).toUpperCase();
+        th2.textContent = weekday;
+        if (date.getDay() === 1 && day !== 1) {
+          th2.style.borderLeft = "2px solid grey";
+        }
+        headerRowWeekDays.appendChild(th2);
+
+        let ths = document.createElement("th");
+        ths.textContent = day;
+        if (date.getDay() === 1 && day !== 1) {
+          ths.style.borderLeft = "2px solid grey";
+        }
+        summaryHeaderRowDays.appendChild(ths);
+
+        let ths2 = document.createElement("th");
+        ths2.textContent = weekday;
+        if (date.getDay() === 1 && day !== 1) {
+          ths2.style.borderLeft = "2px solid grey";
+        }
+        summaryHeaderRowWeekDays.appendChild(ths2);
+      }
+    }
+
+    function adjustAvailabilityColumns() {
+      persons.forEach(person => {
+        if (!person.availability) person.availability = [];
+        const currentCols = person.availability.length > 0 ? person.availability[0].length : 0;
+        if (currentCols < daysInMonth) {
+          const diff = daysInMonth - currentCols;
+          for (let i = 0; i < timeSlots.length; i++) {
+            if (!person.availability[i]) person.availability[i] = [];
+            for (let j = 0; j < diff; j++) {
+              person.availability[i].push(0);
+            }
+          }
+        } else if (currentCols > daysInMonth) {
+          for (let i = 0; i < timeSlots.length; i++) {
+            person.availability[i] = person.availability[i].slice(0, daysInMonth);
+          }
+        }
+      });
+    }
+
+    function addPerson() {
+      const newPerson = { name: "Nouvelle personne", availability: [] };
+      for (let i = 0; i < timeSlots.length; i++) {
+        newPerson.availability[i] = Array(daysInMonth).fill(0);
+      }
+      persons.push(newPerson);
+    }
+
+    function removePersonAt(index) {
+      persons.splice(index, 1);
+      renderEditTable();
+      renderSummaryTable();
+      syncBackend();
+    }
+
+    function renderEditTable() {
+      const tableBody = document.getElementById("tableBody");
+      tableBody.innerHTML = "";
+      persons.forEach((person, pIndex) => {
+        // Ligne de nom avec suppression individuelle
+        let rowName = document.createElement("tr");
+        let cellName = document.createElement("td");
+        cellName.colSpan = daysInMonth + 1;
+        cellName.style.position = "relative";
+
+        let input = document.createElement("input");
+        input.type = "text";
+        input.value = person.name;
+        input.addEventListener("input", (e) => {
+          person.name = e.target.value;
+          syncBackend();
+        });
+        cellName.appendChild(input);
+
+        let removeBtn = document.createElement("span");
+        removeBtn.textContent = "✖";
+        removeBtn.className = "remove-btn";
+        removeBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          removePersonAt(pIndex);
+        });
+        cellName.appendChild(removeBtn);
+
+        rowName.appendChild(cellName);
+        tableBody.appendChild(rowName);
+
+        // Lignes pour chaque tranche horaire
+        for (let t = 0; t < timeSlots.length; t++) {
+          let row = document.createElement("tr");
+          let labelCell = document.createElement("td");
+          labelCell.textContent = timeSlots[t];
+          row.appendChild(labelCell);
+          for (let d = 0; d < daysInMonth; d++) {
+            let cell = document.createElement("td");
+            cell.dataset.person = pIndex;
+            cell.dataset.timeslot = t;
+            cell.dataset.day = d;
+            cell.style.cursor = "pointer";
+            let cellDate = new Date(currentYear, currentMonth, d + 1);
+            if (cellDate.getDay() === 1 && (d + 1) !== 1) {
+              cell.style.borderLeft = "2px solid grey";
+            }
+            updateCellColor(cell, person.availability[t][d]);
+
+            cell.addEventListener("mousedown", (e) => {
+              e.preventDefault();
+              if (e.button !== 0) return;
+              clearSelection();
+              isSelecting = true;
+              selectionStart = { person: pIndex, timeslot: t, day: d };
+              currentSelectionPerson = pIndex;
+              cell.classList.add("selected");
+              selectedCells.push(cell);
+            });
+            cell.addEventListener("mouseover", (e) => {
+              if (isSelecting && pIndex === currentSelectionPerson) {
+                selectionEnd = { person: pIndex, timeslot: t, day: d };
+                updateSelectionForPerson(pIndex);
+              }
+            });
+            cell.addEventListener("mouseup", (e) => {
+              if (isSelecting) {
+                isSelecting = false;
+                if (selectedCells.length > 0) {
+                  showContextMenu(e.pageX, e.pageY);
+                }
+              }
+            });
+            cell.addEventListener("contextmenu", (e) => {
+              e.preventDefault();
+              if (selectedCells.length > 0) {
+                showContextMenu(e.pageX, e.pageY);
+              }
+            });
+
+            row.appendChild(cell);
+          }
+          tableBody.appendChild(row);
+        }
+      });
+    }
+
+    function updateCellColor(cell, state) {
+      cell.textContent = "";
+      if (state === 0) {
+        cell.style.backgroundColor = "white";
+      } else if (state === 1) {
+        cell.style.backgroundColor = "lightgreen";
+      } else if (state === 2) {
+        cell.style.backgroundColor = "lightcoral";
+      }
+    }
+
+    function updateSelectionForPerson(personIndex) {
+      const minTimeslot = Math.min(selectionStart.timeslot, selectionEnd.timeslot);
+      const maxTimeslot = Math.max(selectionStart.timeslot, selectionEnd.timeslot);
+      const minDay = Math.min(selectionStart.day, selectionEnd.day);
+      const maxDay = Math.max(selectionStart.day, selectionEnd.day);
+      selectedCells = [];
+      document.querySelectorAll(`td[data-person='${personIndex}']`).forEach(cell => {
+        const t = parseInt(cell.dataset.timeslot);
+        const d = parseInt(cell.dataset.day);
+        if (t >= minTimeslot && t <= maxTimeslot && d >= minDay && d <= maxDay) {
+          cell.classList.add("selected");
+          selectedCells.push(cell);
+        } else {
+          cell.classList.remove("selected");
+        }
+      });
+    }
+
+    function clearSelection() {
+      document.querySelectorAll("td.selected").forEach(cell => {
+        cell.classList.remove("selected");
+      });
+      selectedCells = [];
+      selectionStart = null;
+      selectionEnd = null;
+      currentSelectionPerson = null;
+    }
+
+    function showContextMenu(x, y) {
+      const menu = document.getElementById("contextMenu");
+      menu.style.left = x + "px";
+      menu.style.top = y + "px";
+      menu.style.display = "block";
+      lastContextMenuTime = Date.now();
+    }
+
+    function hideContextMenu() {
+      document.getElementById("contextMenu").style.display = "none";
+    }
+
+    function renderSummaryTable() {
+      const summaryBody = document.getElementById("summaryTableBody");
+      summaryBody.innerHTML = "";
+      let rowName = document.createElement("tr");
+      let labelCell = document.createElement("td");
+      labelCell.textContent = "Synthèse";
+      rowName.appendChild(labelCell);
+      let emptyCell = document.createElement("td");
+      emptyCell.colSpan = daysInMonth;
+      rowName.appendChild(emptyCell);
+      summaryBody.appendChild(rowName);
+
+      for (let t = 0; t < timeSlots.length; t++) {
+        let row = document.createElement("tr");
+        let labelCell = document.createElement("td");
+        labelCell.textContent = timeSlots[t];
+        row.appendChild(labelCell);
+        for (let d = 0; d < daysInMonth; d++) {
+          let cell = document.createElement("td");
+          let cellDate = new Date(currentYear, currentMonth, d + 1);
+          if (cellDate.getDay() === 1 && (d + 1) !== 1) {
+            cell.style.borderLeft = "2px solid grey";
+          }
+          let states = persons.map(p => p.availability[t][d]);
+          let filtered = states.filter(s => s !== 0);
+          if (filtered.length === 0) {
+            cell.style.backgroundColor = "white";
+          } else {
+            let unique = [...new Set(filtered)];
+            if (unique.length === 1) {
+              let state = unique[0];
+              if (state === 1) {
+                cell.style.backgroundColor = "lightgreen";
+              } else if (state === 2) {
+                cell.style.backgroundColor = "lightcoral";
+              }
+            } else {
+              const redCount = filtered.filter(s => s === 2).length;
+              cell.style.backgroundColor = "yellow";
+              cell.textContent = redCount;
+              const redNames = persons.filter(p => p.availability[t][d] === 2).map(p => p.name);
+              if (redNames.length > 0) {
+                cell.title = "Indisponible: " + redNames.join(", ");
+              }
+            }
+          }
+          row.appendChild(cell);
+        }
+        summaryBody.appendChild(row);
+      }
+    }
+  </script>
+</body>
+
+</html>
